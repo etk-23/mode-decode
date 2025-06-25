@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MoodDecode Chat</title>
+  <style>
+    body { font-family: Arial; background: #f0f2f5; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .chatbox { width: 360px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 500px; }
+    .chat-header { padding: 12px; background: #4A90E2; color: #fff; font-weight: bold; text-align: center; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+    .chat-messages { flex-grow: 1; padding: 12px; overflow-y: auto; }
+    .message { margin: 8px 0; padding: 10px; border-radius: 10px; max-width: 75%; }
+    .user { background: #DCF8C6; align-self: flex-end; }
+    .bot { background: #F1F0F0; align-self: flex-start; }
+    .chat-input { display: flex; padding: 12px; border-top: 1px solid #ddd; }
+    .chat-input input { flex: 1; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+    .chat-input button { padding: 8px 16px; background: #4A90E2; color: #fff; border: none; border-radius: 4px; margin-left: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="chatbox">
+    <div class="chat-header">MoodDecode Chat</div>
+    <div class="chat-messages" id="chat"></div>
+    <div class="chat-input">
+      <input type="text" id="input" placeholder="Type your message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById("input");
+      const chat = document.getElementById("chat");
+      const text = input.value.trim();
+      if (!text) return;
+
+      // Show user message
+      const userMsg = document.createElement("div");
+      userMsg.className = "message user";
+      userMsg.innerText = text;
+      chat.appendChild(userMsg);
+
+      input.value = "";
+
+      // Call API
+      try {
+        const res = await fetch("http://127.0.0.1:8000/analyze-mood", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+
+        const botMsg = document.createElement("div");
+        botMsg.className = "message bot";
+        botMsg.innerText = `Emotion: ${data.emotion}`;
+        chat.appendChild(botMsg);
+      } catch (err) {
+        const botMsg = document.createElement("div");
+        botMsg.className = "message bot";
+        botMsg.innerText = `Error: ${err.message}`;
+        chat.appendChild(botMsg);
+      }
+
+      chat.scrollTop = chat.scrollHeight;
+    }
+  </script>
+</body>
+</html>
