@@ -1,60 +1,96 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import os
 from dotenv import load_dotenv
+import os
 import requests
 
-# Load environment variables
+# Load .env variables
 load_dotenv()
+HF_API_KEY = os.getenv("HF_API_KEY")
 
 # Initialize FastAPI app
 app = FastAPI()
 
-# Allow CORS
+# Allow frontend to connect (for later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins for testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Define request format
 class TextInput(BaseModel):
     text: str
 
-@app.post("/analyze-mood")
+# ✅ Endpoint 1: Analyze Mood
+@app.post("/analyze_mood")
 async def analyze_mood(input: TextInput):
     try:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment")
+        # Hugging Face emotion detection model
+        HF_MODEL_URL = "https://api-inference.huggingface.co/models/j-hartmann/emotion-english-distilroberta-base"
+        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+        payload = {"inputs": input.text}
 
-        endpoint = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={api_key}"
-
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": f"What is the main emotion in this text? Respond with one word (e.g., happy, sad, angry):\n\n{input.text}"
-                        }
-                    ]
-                }
-            ]
-        }
-
-        response = requests.post(endpoint, headers=headers, json=payload)
+        response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
         result = response.json()
-        print("🔍 Gemini raw response:", result)  # 👈 Show full response
 
-        if "candidates" not in result:
-            raise ValueError(f"Gemini error: {result.get('error', 'No candidates returned')}")
+        print("🔍 Hugging Face raw output:", result)
 
-        emotion = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+        # If error from Hugging Face
+        if isinstance(result, dict) and "error" in result:
+            return {"error": result["error"]}
+
+        # Get top emotion
+        emotion = max(result[0], key=lambda x: x['score'])["label"]
         return {"emotion": emotion}
 
     except Exception as e:
-        print("❌ Gemini error:", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
+@app.post("/detect_crisis")
+async def detect_crisis(input: TextInput):
+    try:
+        # Crisis detection model (for detecting harmful intent)
+        HF_MODEL_URL = "https://api-inference.huggingface.co/models/bhadresh-savani/bert-base-uncased-suicide"
+        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+        payload = {"inputs": input.text}
+
+        # Send request to Hugging Face model
+        response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
+        result = response.json()
+
+        if isinstance(result, dict) and "error" in result:
+            return {"error": result["error"]}
+
+        # Check if the model detected any harmful intent
+        crisis_detected = False
+        if result and result[0]:
+            labels = result[0].get('label', [])
+            if "suicidal" in labels or "self-harm" in labels:
+                crisis_detected = True
+        
+        return {"crisis_detected": crisis_detected}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/summarize")
+async def summarize(input: TextInput):
+    try:
+        HF_MODEL_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+        payload = {"inputs": input.text}
+
+        response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
+        result = response.json()
+
+        if isinstance(result, dict) and "error" in result:
+            return {"error": result["error"]}
+
+        summary = result[0]["summary_text"]
+        return {"summary": summary}
+
+    except Exception as e:
+        return {"error": str(e)}
