@@ -49,48 +49,52 @@ async def analyze_mood(input: TextInput):
 
     except Exception as e:
         return {"error": str(e)}
+    
 @app.post("/detect_crisis")
 async def detect_crisis(input: TextInput):
     try:
-        # Crisis detection model (for detecting harmful intent)
-        HF_MODEL_URL = "https://api-inference.huggingface.co/models/bhadresh-savani/bert-base-uncased-suicide"
+        # Hugging Face crisis detection model (replace this URL with your own model URL)
+        HF_MODEL_URL = "https://api-inference.huggingface.co/models/your-crisis-detection-model"
         headers = {"Authorization": f"Bearer {HF_API_KEY}"}
         payload = {"inputs": input.text}
 
-        # Send request to Hugging Face model
         response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
         result = response.json()
 
+        print("🔍 Hugging Face raw output:", result)
+
+        # If error from Hugging Face
         if isinstance(result, dict) and "error" in result:
             return {"error": result["error"]}
 
-        # Check if the model detected any harmful intent
-        crisis_detected = False
-        if result and result[0]:
-            labels = result[0].get('label', [])
-            if "suicidal" in labels or "self-harm" in labels:
-                crisis_detected = True
-        
+        # Assuming the model returns a "crisis_detected" field
+        crisis_detected = result.get("crisis_detected", False)
+
         return {"crisis_detected": crisis_detected}
 
     except Exception as e:
         return {"error": str(e)}
 
+
+
+
+
+#i want to hurt myself
+
 @app.post("/summarize")
 async def summarize(input: TextInput):
-    try:
-        HF_MODEL_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
-        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-        payload = {"inputs": input.text}
+    HF_MODEL = "facebook/bart-large-cnn"
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+    response = requests.post(
+        f"https://api-inference.huggingface.co/models/{HF_MODEL}",
+        headers=headers,
+        json={
+            "inputs": input.text,
+            "parameters": {"max_length": 150, "min_length": 30}
+        }
+    )
+    result = response.json()
+    if isinstance(result, dict) and "error" in result:
+        return {"error": result["error"]}
 
-        response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
-        result = response.json()
-
-        if isinstance(result, dict) and "error" in result:
-            return {"error": result["error"]}
-
-        summary = result[0]["summary_text"]
-        return {"summary": summary}
-
-    except Exception as e:
-        return {"error": str(e)}
+    return {"summary": result[0].get("summary_text", "")}
