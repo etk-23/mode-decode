@@ -27,7 +27,7 @@ app.add_middleware(
 class TextInput(BaseModel):
     text: str
 
-# ✅ Endpoint 1: Analyze Mood
+# Endpoint 1: Analyze Mood
 @app.post("/analyze_mood")
 async def analyze_mood(input: TextInput):
     try:
@@ -53,7 +53,7 @@ async def analyze_mood(input: TextInput):
         return {"error": str(e)}
     
 
-# ✅ Endpoint 2: Detect Crisis
+# Endpoint 2: Detect Crisis
 @app.post("/detect_crisis")
 async def detect_crisis(input: TextInput):
     HF_MODEL_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
@@ -101,20 +101,39 @@ async def detect_crisis(input: TextInput):
 
 #i want to hurt myself
 
+# Endpoint 3: Summerize
 @app.post("/summarize")
 async def summarize(input: TextInput):
-    HF_MODEL = "facebook/bart-large-cnn"
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    response = requests.post(
-        f"https://api-inference.huggingface.co/models/{HF_MODEL}",
-        headers=headers,
-        json={
-            "inputs": input.text,
-            "parameters": {"max_length": 150, "min_length": 30}
-        }
-    )
-    result = response.json()
-    if isinstance(result, dict) and "error" in result:
-        return {"error": result["error"]}
+    HF_MODEL_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}"
+    }
 
-    return {"summary": result[0].get("summary_text", "")}
+    # Optional: Prevent junk output
+    if len(input.text.split()) < 10:
+        return {
+            "summary": input.text,
+            "note": "Too short to summarize — returned original text."
+        }
+
+    payload = {
+        "inputs": input.text,
+        "parameters": {
+            "max_length": 50,
+            "min_length": 10,
+            "do_sample": False
+        }
+    }
+
+    try:
+        response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
+        result = response.json()
+
+        if response.status_code != 200:
+            return {"error": result.get("error", "Unknown error")}
+
+        summary = result[0].get("summary_text", "")
+        return {"summary": summary}
+
+    except Exception as e:
+        return {"error": str(e)}
