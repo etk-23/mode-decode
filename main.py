@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 import requests
+from transformers import pipeline
+import torch
 
 # Load .env variables
 load_dotenv()
@@ -50,32 +52,50 @@ async def analyze_mood(input: TextInput):
     except Exception as e:
         return {"error": str(e)}
     
+
+# ✅ Endpoint 2: Detect Crisis
 @app.post("/detect_crisis")
 async def detect_crisis(input: TextInput):
+    HF_MODEL_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}"
+    }
+
+    payload = {
+        "inputs": input.text,
+        "parameters": {
+            "candidate_labels": ["crisis", "non-crisis", "neutral", "support"]
+        }
+    }
+
     try:
-        # Hugging Face crisis detection model (replace this URL with your own model URL)
-        HF_MODEL_URL = "https://api-inference.huggingface.co/models/your-crisis-detection-model"
-        headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-        payload = {"inputs": input.text}
-
         response = requests.post(HF_MODEL_URL, headers=headers, json=payload)
+        print("🔁 Status Code:", response.status_code)
+        print("📦 Raw Text:", response.text)
+
+        if response.status_code != 200:
+            return {
+                "error": f"Model call failed with status {response.status_code}",
+                "details": response.text
+            }
+
         result = response.json()
+        labels = result.get("labels", [])
+        scores = result.get("scores", [])
 
-        print("🔍 Hugging Face raw output:", result)
+        top_label = labels[0]
+        top_score = scores[0]
+        crisis_detected = top_label.lower() == "crisis"
 
-        # If error from Hugging Face
-        if isinstance(result, dict) and "error" in result:
-            return {"error": result["error"]}
-
-        # Assuming the model returns a "crisis_detected" field
-        crisis_detected = result.get("crisis_detected", False)
-
-        return {"crisis_detected": crisis_detected}
+        return {
+            "crisis_detected": crisis_detected,
+            "top_label": top_label,
+            "confidence": round(top_score, 4),
+            "raw_output": list(zip(labels, scores))
+        }
 
     except Exception as e:
         return {"error": str(e)}
-
-
 
 
 
